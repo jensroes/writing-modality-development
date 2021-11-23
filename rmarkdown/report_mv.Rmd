@@ -1,0 +1,603 @@
+---
+title: "Development of handwriting and typing skills in Norwegian first graders"
+author: "Eivor Finset Spilling, Vibeke Rønneberg, Wenke Mork Rogne, Jens Roeser, Mark Torrance"
+date: "04/03/2020"
+output: 
+  bookdown::html_document2: default
+#  pdf_document: default
+  ss: styles.css
+  fig_caption: yes
+  theme: flatly
+  toc: no
+  toc_depth: 1
+  spacing: double
+  indent: true
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(kableExtra)
+# CRTL + Shift + R for citations
+
+# Collapse the values within a grouped dataframe
+collapse_rows_df <- function(df, variable){
+  group_var <- enquo(variable)
+  df %>%
+    group_by(!! group_var) %>%
+    mutate(groupRow = 1:n()) %>%
+    ungroup() %>%
+    mutate(!!quo_name(group_var) := ifelse(groupRow == 1, as.character(!! group_var), "")) %>%
+    select(-c(groupRow))
+}
+
+# Plotting theme
+theme_set(theme_bw() +
+            theme(legend.position = "top",
+                  legend.justification = "right"))
+```
+
+# Data analysis
+
+Data were analysed in Bayesian linear mixed effects models [@gelman2014;@mcelreath2016statistical]. The R [@R-base] package brms [@brms1;@brms2] was used to model the data. Models were fitted with weakly informative priors [see @mcelreath2016statistical], and run with 10,000 iterations on 3 chains with a warm-up of 5,000 iterations and no thinning. Model convergence was confirmed by the Rubin-Gelman statistic ($\hat{R}$ = 1) [@gelman1992] and inspection of the Markov chain Monte Carlo chains.
+
+We calculated the statistical support for the effects of interest and the support for the null hypothesis over the alternative hypothesis and the inverse, the support for the alternative hypothesis over the null hypothesis. In contrast to traditional statistical methods (null-hypothesis significance testing), the Bayesian framework used in our analysis allows us to infer how probable the null hypothesis is given the evidence [for discussion see @dienes2014using; @dienes2018four; @dienes2016bayes; @schonbrodt2017sequential; @wagenmakers2018bayesian]. This evidence was obtained using Bayes Factors (henceforth, BF) calculated using the Savage-Dickey method [see, e.g., @dickey1970weighted; @wagenmakers2010bayesian]. We calculated both the evidence for the alternative hypothesis H$_1$ over the null hypothesis H$_0$ (BF$_{10}$) and the evidence for the null hypothesis H$_0$ over the alternative hypothesis, given the data. A BF$_{10}$ larger than 5 indicate moderate and larger than 10 strong evidence for a statistically meaningful effect compared to the null hypothesis H$_0$ [see, e.g., @bag12; @jeffreys1961theory; @lee2014bayesian]. For example BF$_{10}$=2 reflect that the alternative hypothesis is two times more likely than the null hypothesis given the evidence. Similarly, a BF$_{01}$ larger than 10 indicates strong evidence in favour of the null hypothesis H$_0$ over the alternative hypothesis H$_1$. 
+
+Further, we report the most probable posterior (i.e. inferred) parameter value $\mu$ as well as the interval around $\mu$ that contains 95% of the posterior probability mass; 95% probability intervals (henceforth, PI) [@kruschke2012time; @nicenboim2016statistical; @sorensen2016bayesian].
+
+For model comparisons we used out-of-sample predictions estimated using Pareto smoothed importance-sampling leave-one-out cross-validation [@vehtari2015pareto; @vehtari2017practical]. Predictive performance was estimated as the sum of the expected log predictive density ($\widehat{elpd}$) and the difference $\Delta\widehat{elpd}$ between models. The advantage of using leave-one-out cross-validation is that models with more parameters are penalised to prevent overfit.
+
+All models were fitted with random intercepts for schools and students nested in schools, and with slope adjustments for time point (i.e. `(time|s|child:school) + (time|p|school)`) 
+
+
+
+# Participants 
+
+```{r}
+# Data
+modality <- readRDS(file = "../data/modality_development.Rdata") %>%
+  mutate(story_grammar = ordered(story_grammar),
+         spacing_total = correct_spaces + additional_spaces + missing_spaces,
+         terminators_total = correct_terminators + additional_terminators + missing_terminators,
+         across(c(advanced_structures, events, syntax, number_words, 
+                  spelling_correct, correct_spaces, 
+                  spacing_total, terminators_total), as.integer)) 
+
+modality_clean <- modality %>% drop_na()
+
+n <- length(levels(modality$child))
+n_clean <- length(levels(factor(modality_clean$child)))
+
+missing <- count(modality_clean, child) %>%
+  filter(n != 5) %>%
+  count(n)
+```
+
+
+`r n` children were tested at 5 time points in either handwriting or keyboard typing. After data cleaning (removing incomplete rows) `r n_clean` children remained. For some children we did not record 5 sessions. `r missing$nn[1]` children contributed data to `r missing$n[1]` time points and `r missing$nn[2]` children contributed data to `r missing$n[2]` time points. No child contributed data to less than `r missing$n[1]` time points and `r n - sum(missing$nn)` children contributed data to all 5 time points.
+
+
+# Classroom activity
+
+
+```{r}
+class_data <- readRDS(file = "../data/modality_development.Rdata") %>%
+  mutate(across(c(discuss_text, discuss_structure, write_story), as.ordered)) %>% 
+  drop_na() %>%
+  select(school, discuss_text, discuss_structure, write_story, modality) %>%
+  unique()
+```
+
+The frequency of classroom-activity ratings is shown by modality and for each type of classroom activity in the following figure:
+
+```{r summaryclass, fig.align='center', fig.cap='Frequency of classroom-activity ratings by modality.', fig.pos='H', fig.width=7.5, fig.height=4}
+class_data %>%
+  pivot_longer(discuss_text:write_story) %>%
+  count(name, modality, value) %>%
+  mutate(name = str_to_sentence(str_replace(name, "_", " "))) %>%
+  ggplot(aes(y = n, x = value, colour = modality, fill = modality)) +
+    geom_linerange( aes(ymin = 0, ymax = n-.1), colour = "grey", size = 1.5, position = position_dodge(1)) +
+  geom_point(size = 5, alpha = .75, position = position_dodge(1)) +
+  #geom_col(width = .5, alpha = .5, position = position_dodge(1)) +
+  facet_wrap(~name) +
+  labs(y = "Frequency", x = "Rating", colour = "Modality", fill = "Modality") +
+  scale_y_continuous(limits = c(0, 5)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") 
+```
+
+
+
+
+We tested whether there is a modality difference for different types of class room activities. We used a multivariate model with cumulative distribution for outcome variables `discuss_text`, `discuss_structure`, and `write_story` with one observation each per class room (*N*=`r nrow(class_data)`, i.e. `r nrow(class_data)/2` per modality).  Model comparisons in leave-one-out cross-validation revealed for improvement for the model with modality as fixed effect.
+
+
+```{r}
+class <- read_csv("../stanout/model_comparison_classroom.csv") %>% 
+  mutate(Model = str_remove(string = model, pattern = "mv_"),
+         Model = recode(Model, "classroom" = "Intercept only",
+                               "classroom_modality" = "Modality")) %>%
+  select(Model, elpd_diff, se_diff, elpd_loo, se_elpd_loo) %>%
+  mutate_if(is.numeric, round, 0) %>%
+  unite(col = "diff", c(elpd_diff, se_diff), sep = " (") %>%
+  unite(col = "fit", c(elpd_loo, se_elpd_loo), sep = " (") %>%
+  mutate_at(c("diff", "fit"), paste0, ")") %>%
+  mutate(diff = ifelse(diff == "0 (0)", "--", diff))
+
+names(class)[c(2,3)] <- c("$\\Delta\\widehat{elpd}$", "$\\widehat{elpd}$")
+
+```
+
+```{r class,  results='asis'}
+class %>% knitr::kable(align =c("l", "r", "r"), 
+               caption = "Model comparisons for class room activity. Predictive performance was indicated as expected log pointwise predictive density ($\\widehat{elpd}$). The top row shows the model with the highest predictive performance, i.e. the highest $\\widehat{elpd}$; the differences $\\Delta\\widehat{elpd}$ are relative to the model with the highest predictive performance.") %>%
+  kable_styling(position = "center", full_width = F) %>%
+  footnote("Standard errors are shown in parentheses.", threeparttable = T)  %>%
+  column_spec(1, width = "15em") %>%
+  column_spec(2:3, width = "7em") 
+
+```
+
+The posterior for each outcome variable individually, rather than for class activity overall as shown in the previous model comparison, revealed inconclusive evidence for a modality effect on outcome measures discuss text and discuss structure but moderate evidence for a higher write-story score for keyboard typing compared to handwriting.
+
+```{r classpost, results = "asis"}
+class_post <- read_csv("../stanout/posterior_summary_class.csv") %>%
+  mutate(DV = recode(DV, discusstext = "Discuss text",
+                         discussstructure = "Discuss structure",
+                         writestory = "Write story"),
+         across(where(is.numeric), round, 2),
+         Estimate = paste0(Estimate, " [", Q2.5, " -- ", Q97.5, "]")) %>%
+  select(Outcome = DV, Estimate, `H~1~` = H1)
+
+class_post %>%  
+  knitr::kable(align =c("l", "r", "r"), 
+               caption = "Modality effect by outcome variable (multivariate model).") %>%
+  kable_styling(position = "center", full_width = F) %>%
+  footnote("Upper and lower indicate the bounds of 95% PIs. H~1~ indicates the statistical support for the alternative hypothesis over the null corresponding (Bayes Factor).", threeparttable = T)  %>%
+  column_spec(1:2, width = "12em") %>%
+  column_spec(3, width = "5em") 
+
+```
+
+# Text composition data
+
+## Outcome variables and probability models
+
+We used multivariate models to account for correlations across outcome variables. In other words, instead of modelling each outcome variable individually, we can fit one model that includes all nine outcome variables. 
+
+Outcomes variables and probability models (default link function throughout)  [see @burkner2017advanced;@burkner2019bayesian;@burkner2018ordinal]:
+
+```{r}
+vars <- tibble(`Outcome variables` = c("Advanced structures", "Events", "Syntax", "Number of words", "Story grammar", "Vocabulary mean age",
+               "Spelling correct", "Correct spacing", "Correct terminators"),
+       `Probability models` = c("Negative binomial","Negative binomial","Negative binomial","Negative binomial", "Sequential process model (sratio)", "Gaussian", "Binomial", "Binomial", "Binomial" ))
+```
+
+```{r vars,  results='asis'}
+vars %>%  knitr::kable(digits = 2, 
+               align =c("l", "l"), 
+               caption = "Outcome variables and probability models.") %>%
+  kable_styling(position = "center", full_width = F) 
+
+```
+
+Count data were modeled using a negative-binomial distribution to account for overdispersion. Sequential process models were used for ordinal data (story grammar). Sequential process models are useful for variables in which the psychological distance between categories cannot be assumed to be identical. In particular story grammar was modeled as sequential process as the distance between a score of 0 and a score of 1 might not be equal to the distance between 1 and 2. A Gaussian distribution was used for vocabulary mean age.
+
+Three variables were correct for total use (and incorrect use) so that we can determine their respective improvements. This was done using the Binomial probability model with the following specifications:
+
+$$ 
+y_{\text{spelling}} = \frac{\text{correct}}{n_{\text{words}}}
+$$
+
+$$
+y_{\text{spacing}} = \frac{\text{correct}}{\text{correct} + \text{additional} + \text{missing}}
+$$
+
+$$
+y_{\text{terminators}} = \frac{\text{correct}}{\text{correct} + \text{additional} + \text{missing}}
+$$
+
+
+We incrementally increased model complexity by adding first timepoint (1-5), then modality (levels: handwriting, typing), and their interaction:
+
+
+1. `y ~ 1 + (time|s|child:school) + (time|p|school)`
+2. `y ~ time + (time|s|child:school) + (time|p|school)`
+3. `y ~ time + modality + (time|s|child:school) + (time|p|school)`
+4. `y ~ time + modality + time:modality + (time|s|child:school) + (time|p|school)`
+
+
+
+```{r}
+#Models with covariates:
+
+#5. `y ~ time + modality + time:modality + (discuss text + discuss structure + write story) + (time|s|child:school) + (time|p|school)`
+#6. `y ~ time + modality + time:modality * (discuss text + discuss structure + write story) + (time|s|child:school) + (time|p|school)`
+
+```
+
+
+
+## Timecourse function
+
+Time was modeled as first order orthogonal polynomial (linear function) and as second (quadratic) and third order polynomial (cubic). Model comparisons in leave-one-out cross-validation revealed highest predictive performance for the cubic function which, however, was non-different from the quadratic model. Therefore, we use the quadratic function for modelling the time course in the models with modality as factor.
+
+```{r}
+time <- read_csv("../stanout/time_model_comparisons.csv") %>% 
+  mutate(Model = str_remove(string = model, pattern = "mv_"),
+         Model = recode(Model, "time_poly2" = "Quadratic",
+                               "time_poly3" = "Cubic",
+                                "time" = "Linear",
+                                "null" = "Intercept only")) %>%
+  select(Model, elpd_diff, se_diff, elpd_loo, se_elpd_loo) %>%
+  mutate_if(is.numeric, round, 0) %>%
+  unite(col = "diff", c(elpd_diff, se_diff), sep = " (") %>%
+  unite(col = "fit", c(elpd_loo, se_elpd_loo), sep = " (") %>%
+  mutate_at(c("diff", "fit"), paste0, ")") %>%
+  mutate(diff = ifelse(diff == "0 (0)", "--", diff))
+
+names(time)[c(2,3)] <- c("$\\Delta\\widehat{elpd}$", "$\\widehat{elpd}$")
+```
+
+```{r time,  results='asis'}
+time %>% knitr::kable(align =c("l", "r", "r"), 
+               caption = "Model comparisons for time function. Predictive performance was indicated as expected log pointwise predictive density ($\\widehat{elpd}$). The top row shows the model with the highest predictive performance, i.e. the highest $\\widehat{elpd}$; the differences $\\Delta\\widehat{elpd}$ are relative to the model with the highest predictive performance.") %>%
+  kable_styling(position = "center", full_width = F) %>%
+  footnote("Standard errors are shown in parentheses.", threeparttable = T)  %>%
+  column_spec(1, width = "15em") %>%
+  column_spec(2:3, width = "7em") 
+
+```
+
+
+
+
+## Modality effect
+
+Highest predictive performance was found to model that included the timecourse-by-modality interaction. In other words, writing modality has a meaningful effect on the timecourse of writing development.
+
+```{r}
+post_mod <- read_csv("../stanout/model_comparison_nocovars.csv") %>% 
+  mutate(Model = str_remove(string = model, pattern = "mv_"),
+         Model = recode(Model, "null" = "Intercept only",
+                               "time" = "Time",
+                               "time_poly2" = "Time + Time$^2$",
+                               "time_modality_poly2" = "Modality + Time + Time$^2$",
+                               "time_x_modality_poly2" = "Modality $\\times$ (Time + Time$^2$)")) %>%
+  select(Model, elpd_diff, se_diff, elpd_loo, se_elpd_loo) %>%
+  mutate_if(is.numeric, round, 0) %>%
+  unite(col = "diff", c(elpd_diff, se_diff), sep = " (") %>%
+  unite(col = "fit", c(elpd_loo, se_elpd_loo), sep = " (") %>%
+  mutate_at(c("diff", "fit"), paste0, ")") %>%
+  mutate(diff = ifelse(diff == "0 (0)", "--", diff))
+
+names(post_mod)[c(2,3)] <- c("$\\Delta\\widehat{elpd}$", "$\\widehat{elpd}$")
+```
+
+```{r postmod,  results='asis'}
+post_mod %>% knitr::kable(align =c("l", "r", "r"), 
+               caption = "Model comparisons for modality timecourse effects. Predictive performance was indicated as expected log pointwise predictive density ($\\widehat{elpd}$). The top row shows the model with the highest predictive performance, i.e. the highest $\\widehat{elpd}$; the differences $\\Delta\\widehat{elpd}$ are relative to the model with the highest predictive performance.") %>%
+  kable_styling(position = "center", full_width = F) %>%
+  footnote("Standard errors are shown in parentheses.", threeparttable = T)  %>%
+  column_spec(1, width = "25em") %>%
+  column_spec(2:3, width = "7em") 
+
+```
+
+
+
+## Model coefficients
+
+The following table shows the parameter values estimates for each outcome variable (rows) for main effects of modality and timepoint and their interaction (columns). Evidence for an interaction of modality and the quadratic timepoint term was highlighted in red; evidence in support of the null hypothesis was highlighted in green.
+
+
+```{r}
+post_sum <- read_csv("../stanout/posterior_summary.csv") %>%
+    mutate(DV = recode_factor(DV, advancedstructures = "Advanced structures",
+                         correctspaces = "Correct spacing",
+                         spellingcorrect = "Correct spelling", 
+                         correctterminators = "Correct terminators",
+                         events = "Events",
+                         numberwords = "Number of words",
+                         storygrammar = "Story grammar",
+                         syntax = "Syntax",
+                         vocabmeanage = "Vocabulary mean age",
+                         .ordered = T),
+           Pred = recode_factor(Pred, polytime21 = "Time",
+                               polytime22 = "Time$^2$",
+                               modalitytyping = "Modality",
+                               `polytime21:modalitytyping` = "Modality $\\times$ Time",
+                               `polytime22:modalitytyping` = "Modality $\\times$ Time$^2$",
+                                .ordered = T)) %>%
+    arrange(DV, Pred)
+
+post_sum_table <- post_sum %>%
+  mutate(across(c("Estimate", "Q2.5", "Q97.5", "H1"), round, 2),
+         H1 = abs(H1),
+         H1 = ifelse(H1 > 100, ">100", as.character(H1)),
+         Estimate = paste0(Estimate, " [", Q2.5, " -- ", Q97.5, "]")) %>% 
+  select(Outcome = DV, Predictor = Pred, Estimate, `H~1~` = H1) %>%
+  pivot_wider(names_from = "Predictor", values_from = c("Estimate", "H~1~")) %>%
+  select(Outcome, ends_with("_Time"), ends_with("_Time$^2$"), ends_with("_Modality"),
+                  ends_with(" Time"), ends_with(" Time$^2$")) 
+
+names(post_sum_table)[-1] <- c("Estimate", "H~1~")
+
+bfs <- filter(post_sum, Pred == "Modality $\\times$ Time$^2$") %>% pull(H1)
+
+fillcond <- ifelse(bfs > 5, "#D7261E", ifelse(bfs < 1/3, "#08a440", "white"))
+colourcond <- ifelse(fillcond == "white", "black", "white")
+boldcond <- ifelse(fillcond == "white", FALSE, TRUE)
+
+post_sum_table %>%
+  knitr::kable(align =c("l", rep("r",10)), 
+               caption = "Model coefficients by outcome variable (multivariate model). Outcomes measures are shown in rows and predictor variables in columns. Moderate to strong evidence in favour of a time-by-modality interaction was highlighted in red; evidence against the alternative hypothesis was highlighted in green.") %>%
+  kable_styling(position = "center", full_width = F, font_size = 11) %>%
+  footnote("Upper and lower indicate the bounds of 95% PIs. H~1~ indicates the statistical support for the alternative hypothesis over the null corresponding (Bayes Factor).", threeparttable = T)  %>%
+  add_header_above(c(" " = 1, "Time" = 2, "Time$^2$" = 2, "Modality" = 2,
+                     "Modality $\\times$ Time" = 2,"Modality $\\times$ Time$^2$" = 2)) %>%
+  column_spec(10:11, color = colourcond, background = fillcond, bold = boldcond)
+
+```
+
+
+
+```{r}
+bf_spacing <- read_csv("../stanout/model_comparisons_spacing.csv") %>% slice(1) %>% pull(bfs) %>% round(0)
+bf_spelling <- read_csv("../stanout/model_comparisons_spelling.csv") %>% slice(1) %>% pull(bfs) %>% round(0)
+```
+
+The overall contribution of addting the by-modality interaction was determined by comparing a a simple main effects models to a model with time-by-modality interactions for each correct spacing and correct spelling. Models were comapred using Bayes Factors estimated via bridge sampling [@bennett1976efficient;@meng1996simulating]. We found evidence in favour of the interaction model for both spacing (BF$_{10}$ = `r bf_spacing`) and spelling (BF$_{10}$ = `r bf_spelling`).
+
+
+
+## Timecourse visualisation
+
+The posterior of the best fitting model was used to visualise the modality-timecourse effects for each outcome variable. For events, number of words, and syntax we found non-different timecourse effects for handwriting and typing. In other words, development in these skills had the same growth rate. Different growth rates were found for correct spacing, correct spelling, and correct terminators after accounting for longer texts for later timepoints. For correct spacing and correct spelling we observe a learning curve for handwriting that is catching up with the performance of keyboard typists. The pattern observed in the posterior for correct terminators is inconclusive (we will come back to this below). For advanced structures and story grammar we observe growth but no conclusive evidence as to whether the function was different for writing modality. The evidence for timecourse changes and modality-specific effects was negligible for vocabulary mean age.
+
+
+```{r summarymv, fig.align='center', fig.cap='Posterior of the multivariate analysis. Shown are the timecourse effects for each outcome variable by modality.', fig.pos='H', fig.width=8.5, fig.height=6}
+
+plot_post <- read_csv("../stanout/posterior_for_plotting.csv") %>%
+  mutate(dv = recode(dv, advancedstructures = "Advanced structures",
+                         correctspaces = "Correct spacing",
+                         spellingcorrect = "Correct spelling", 
+                         correctterminators = "Correct terminators",
+                         events = "Events",
+                         numberwords = "Number of words",
+                         storygrammar = "Story grammar",
+                         syntax = "Syntax",
+                         vocabmeanage = "Vocabulary mean age"),
+         est = ifelse(dv == "Story grammar", est - 1, est),
+         lo = ifelse(dv == "Story grammar", lo - 1, lo),
+         up = ifelse(dv == "Story grammar", up - 1, up))
+
+ggplot(plot_post, aes(x = time, y = est, colour = modality, fill = modality)) +
+  geom_ribbon(aes(ymin = lo, ymax = up), colour = NA, alpha =  .1) +
+  geom_line(size = .5) +
+  facet_wrap(~dv, scales = "free") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(colour = "Modality", fill = "Modality", x = "Time points", 
+       y = "Posterior estimates with 95% PIs")
+
+
+```
+
+
+## Terminator analysis
+
+To explore the unclear results for terminator accuracy (evidence for time-by-modality interaction but unclear timecourse effect), we analysed the three variables that were used for terminator accuracy separately in a multivariate model with negative-binomial distribution for correct terminators, missing terminators, and additional terminators. 
+
+### Model comparisons
+
+Model comparisons confirmed an interaction for modality and the quadratic function for time.
+
+
+```{r}
+terminator <- read_csv("../stanout/model_comparisons_terminators.csv") %>% 
+  mutate(Model = str_remove(string = model, pattern = "mv_terminators_"),
+         Model = recode(Model, "time_x_modality_poly2" = "Modality $\\times$ (Time + Time$^2$)",
+                               "time_poly2" = "Time + Time$^2$",
+                               "time_modality_poly2" = "Modality + Time + Time$^2$",
+                               "time" = "Time", 
+                               "null" = "Intercept only")) %>%
+  select(Model, elpd_diff, se_diff, elpd_loo, se_elpd_loo) %>%
+  mutate_if(is.numeric, round, 0) %>%
+  unite(col = "diff", c(elpd_diff, se_diff), sep = " (") %>%
+  unite(col = "fit", c(elpd_loo, se_elpd_loo), sep = " (") %>%
+  mutate_at(c("diff", "fit"), paste0, ")") %>%
+  mutate(diff = ifelse(diff == "0 (0)", "--", diff))
+
+names(terminator)[c(2,3)] <- c("$\\Delta\\widehat{elpd}$", "$\\widehat{elpd}$")
+
+```
+
+```{r terminator,  results='asis'}
+terminator %>% knitr::kable(align =c("l", "r", "r"), 
+               caption = "Model comparisons for terminator analysis. Predictive performance was indicated as expected log pointwise predictive density ($\\widehat{elpd}$). The top row shows the model with the highest predictive performance, i.e. the highest $\\widehat{elpd}$; the differences $\\Delta\\widehat{elpd}$ are relative to the model with the highest predictive performance.") %>%
+  kable_styling(position = "center", full_width = F) %>%
+  footnote("Standard errors are shown in parentheses.", threeparttable = T)  %>%
+  column_spec(1, width = "15em") %>%
+  column_spec(2:3, width = "7em") 
+
+```
+
+### Model coefficients
+
+
+The model coefficients show strong evidence for a modality-by-time interaction for correct terminators and moderate evidence for additional terminators and missing terminators.
+
+```{r}
+post_sum <- read_csv("../stanout/posterior_summary_terminators.csv") %>%
+    mutate(DV = recode_factor(DV, additionalterminators = "Additional terminators",
+                                  correctterminators = "Correct terminators",
+                                  missingterminators = "Missing terminators", .ordered = T),
+           Pred = recode_factor(Pred, polytime21 = "Time",
+                               polytime22 = "Time$^2$",
+                               modalitytyping = "Modality",
+                               `polytime21:modalitytyping` = "Modality $\\times$ Time",
+                               `polytime22:modalitytyping` = "Modality $\\times$ Time$^2$",
+                                .ordered = T)) %>%
+    arrange(DV, Pred)
+
+post_sum_table <- post_sum %>%
+  mutate(across(c("Estimate", "Q2.5", "Q97.5", "H1"), round, 2),
+         H1 = abs(H1),
+         H1 = ifelse(H1 > 100, ">100", as.character(H1)),
+         Estimate = paste0(Estimate, " [", Q2.5, " -- ", Q97.5, "]")) %>% 
+  select(Outcome = DV, Predictor = Pred, Estimate, `H~1~` = H1) %>%
+  pivot_wider(names_from = "Predictor", values_from = c("Estimate", "H~1~")) %>%
+  select(Outcome, ends_with("_Time"), ends_with("_Time$^2$"), ends_with("_Modality"),
+                  ends_with(" Time"), ends_with(" Time$^2$")) 
+
+names(post_sum_table)[-1] <- c("Estimate", "H~1~")
+
+bfs <- filter(post_sum, Pred == "Modality $\\times$ Time$^2$") %>% pull(H1)
+
+fillcond <- ifelse(bfs > 5, "#D7261E", ifelse(bfs < 1/3, "#08a440", "white"))
+colourcond <- ifelse(fillcond == "white", "black", "white")
+boldcond <- ifelse(fillcond == "white", FALSE, TRUE)
+
+post_sum_table %>%
+  knitr::kable(align =c("l", rep("r",10)), 
+               caption = "Model coefficients by terminator measure (multivariate model). Outcomes measures are shown in rows and predictor variables in columns. Moderate to strong evidence in favour of a time-by-modality interaction was highlighted in red.") %>%
+  kable_styling(position = "center", full_width = F, font_size = 11) %>%
+  footnote("Upper and lower indicate the bounds of 95% PIs. H~1~ indicates the statistical support for the alternative hypothesis over the null corresponding (Bayes Factor).", threeparttable = T)  %>%
+  add_header_above(c(" " = 1, "Time" = 2, "Time$^2$" = 2, "Modality" = 2,
+                     "Modality $\\times$ Time" = 2,"Modality $\\times$ Time$^2$" = 2)) %>%
+  column_spec(10:11, color = colourcond, background = fillcond, bold = boldcond)
+
+```
+
+### Timecourse visualisation
+
+The posterior for each temrinator variable is shown in the following figure. The timecourse functions show different profiles for typing and handwriting with, however, a substantial variability.
+
+```{r summarymvterminator, fig.align='center', fig.cap='Posterior of the multivariate analysis. Shown are the timecourse effects for each terminator variable by modality.', fig.pos='H', fig.width=8.5, fig.height=4}
+
+plot_post <- read_csv("../stanout/posterior_for_plotting_terminators.csv") %>%
+  mutate(dv = recode_factor(dv, additionalterminators = "Additional terminators",
+                                correctterminators = "Correct terminators",
+                                missingterminators = "Missing terminators", .ordered = T))
+
+ggplot(plot_post, aes(x = time, y = est, colour = modality, fill = modality)) +
+  geom_ribbon(aes(ymin = lo, ymax = up), colour = NA, alpha =  .1) +
+  geom_line(size = .5) +
+  facet_wrap(~dv, scales = "free") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(colour = "Modality", fill = "Modality", x = "Time points", 
+       y = "Posterior estimates with 95% PIs")
+
+
+```
+
+### Correct terminators (corrected for text length)
+
+The strongest evidence for a modality-by-time interaction was found for the number of correct terminators. As the texts children produced were shorter at earlier timepoints, meaning they produced less terminators overall, we adjusted the analysis of the number of correct terminators for text length (i.e. number of words).
+
+
+#### Model coefficients
+
+After accounting for the possibility that text-length confounded the results of the analysis of correct terminators, we don't observe evidence for modality-by-time interaction.
+
+
+```{r}
+post_sum <- read_csv("../stanout/posterior_summary_terminators_correct.csv") %>%
+           mutate(Pred = recode_factor(Pred, polytime21 = "Time",
+                               polytime22 = "Time$^2$",
+                               number_words = "Number of words",
+                               modalitytyping = "Modality",
+                               `modalitytyping:number_words` = "Modality $\\times$ Number of words",
+                               `polytime21:modalitytyping` = "Modality $\\times$ Time",
+                               `polytime22:modalitytyping` = "Modality $\\times$ Time$^2$",
+                               `polytime21:number_words` = "Number of words $\\times$ Time",
+                               `polytime22:number_words` = "Number of words $\\times$ Time$^2$",
+                               `polytime21:modalitytyping:number_words` = "Number of words $\\times$ Modality $\\times$ Time",
+                               `polytime22:modalitytyping:number_words` = "Number of words $\\times$ Modality $\\times$ Time$^2$",
+
+                                .ordered = T)) %>%
+    arrange(Pred)
+
+post_sum_table <- post_sum %>%
+  mutate(across(c("Estimate", "Q2.5", "Q97.5", "H1"), round, 2),
+         H1 = abs(H1),
+         H1 = ifelse(H1 > 100, ">100", as.character(H1)),
+         Estimate = paste0(Estimate, " [", Q2.5, " -- ", Q97.5, "]"),
+         group = c(rep("Main effects", 4), rep("Two-way interactions", 5), rep("Three-way interactions", 2))) %>% 
+  select(group, Predictor = Pred, Estimate, `H~1~` = H1) 
+
+#bfs <- filter(post_sum, Pred == "Modality $\\times$ Time$^2$") %>% pull(H1)
+#fillcond <- ifelse(bfs > 5, "#D7261E", ifelse(bfs < 1/3, "#08a440", "white"))
+#colourcond <- ifelse(fillcond == "white", "black", "white")
+#boldcond <- ifelse(fillcond == "white", FALSE, TRUE)
+
+post_sum_table %>%
+  select(-group) %>%
+  knitr::kable(align =c("l", rep("r",2)), 
+               caption = "Model coefficients terminator correct (multivariate model).") %>%
+  kable_styling(position = "center", full_width = F, font_size = 12) %>%
+  footnote("Upper and lower indicate the bounds of 95% PIs. H~1~ indicates the statistical support for the alternative hypothesis over the null corresponding (Bayes Factor).", threeparttable = T)  %>%
+ # column_spec(3, color = colourcond, background = fillcond, bold = boldcond) %>%
+  pack_rows(index = table(post_sum_table$group)[c(1,3,2)])
+
+```
+
+#### Timecourse visualisation
+
+```{r summarymvterminatorcorrect, fig.align='center', fig.cap='Posterior of terminators correct after adjusting for text length. Shown are the timecourse effects for terminators correct by modality.', fig.pos='H', fig.width=6.5, fig.height=4}
+
+read_csv("../stanout/posterior_for_plotting_terminators_correct.csv") %>%
+  ggplot(aes(x = time, y = est, colour = modality, fill = modality)) +
+  geom_ribbon(aes(ymin = lo, ymax = up), colour = NA, alpha =  .1) +
+  geom_line(size = .5) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(colour = "Modality", fill = "Modality", x = "Time points", 
+       y = "Posterior estimates with 95% PIs")
+
+```
+
+
+### Distribution of sample
+
+It would be good to give some information that helps to understand the terminator results. At this place we should probably add some of the extreme examples from kids using terminators instead of spaces. The figure below might not help as much as some examples would do. The figure shows the distribution of values for additional, correct, and missing terminators across all 5 time points. What the figure does highlight is that there are the extreme values. For example, we see that there are extreme values of more than 20 missing terminators at timepoints 3-5. There is an extreme case of more than 30 additional terminators at timepoint 1. But we also see children with 10 and more correct terminators across all timepoints.
+
+
+```{r terminatorcorrectraw, fig.align='center', fig.cap='Density distributions ', fig.pos='H', fig.width=8.5, fig.height=4.5}
+modality_clean %>%
+  select(child, modality, time, contains("terminator"), number_words) %>%
+  mutate(#terminator_accuracy = correct_terminators / terminators_total,
+         #terminator_words = correct_terminators / number_words,
+         time = time + 1) %>%
+  select(-terminators_total, -number_words) %>%
+  pivot_longer(contains("terminator")) %>%
+  mutate(name = recode_factor(name, additional_terminators = "Additional terminators",
+                                correct_terminators = "Correct terminators",
+                                missing_terminators = "Missing terminators",
+#                                terminator_accuracy = "Terminator accuracy",
+#                                terminator_words = "Correct terminators / text length",
+                                .ordered = T)) %>%
+  select(modality, time, name, value) %>%
+  ggplot(aes(x = value, y = factor(time), fill = factor(time))) +
+  ggridges::stat_binline(bins = 20, scale = .75, alpha = .5, draw_baseline = FALSE, show.legend = FALSE) +
+  facet_wrap(~name, nrow = 1, scales = "free") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+#  scale_x_continuous(limits = c(-5, 30)) +
+  labs(colour = "Modality", fill = "Modality", y = "Time points", 
+       x = "Value")
+
+```
+
+
+
+
+
+
+## References

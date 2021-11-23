@@ -1,0 +1,70 @@
+rm(list=ls())
+library(tidyverse)
+library(brms)
+
+# Model fit params
+nchains <- ncores <- 3
+niter <- 10000
+warmup <- niter/2
+
+# Data
+modality <- readRDS(file = "data/modality_development.Rdata") %>%
+  mutate(story_grammar = ordered(story_grammar),
+         spacing_total = correct_spaces + additional_spaces + missing_spaces,
+         terminators_total = correct_terminators + additional_terminators + missing_terminators,
+         across(c(advanced_structures, events, syntax, number_words, 
+                  spelling_correct, correct_spaces, 
+                  spacing_total, terminators_total), as.integer)) %>% drop_na()
+
+# Formulae
+f <- bf(advanced_structures ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = negbinomial()) +
+     bf(events ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = negbinomial()) +
+     bf(syntax ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = negbinomial()) +
+     bf(number_words ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = negbinomial()) + 
+     bf(story_grammar ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = sratio()) +
+     bf(vocab_mean_age ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = gaussian()) +
+     bf(spelling_correct | trials(number_words) ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = binomial(link = "logit")) + 
+     bf(correct_spaces | trials(spacing_total) ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = binomial(link = "logit")) + 
+     bf(correct_terminators | trials(terminators_total) ~ 1 + (poly(time, 1)|s|child:school) + (poly(time, 1)|p|school), 
+        family = binomial(link = "logit")) 
+
+
+# Get priors
+get_prior(f + set_rescor(FALSE), data = modality)
+
+# Priors
+prior <- set_prior("normal(0, 2)", class = "Intercept", 
+                   resp = c( "advancedstructures", "events", "syntax")) +
+         set_prior("normal(2, 2)", class = "Intercept", resp = "numberwords") +
+         set_prior("normal(1, 4)", class = "Intercept", resp = "storygrammar") +
+         set_prior("normal(7, 1)", class = "Intercept", resp = "vocabmeanage") +
+         set_prior("normal(0, 3)", class = "Intercept", 
+                   resp = c("spellingcorrect", "correctspaces", "correctterminators")) 
+
+# Sampling
+m <- brm(f + set_rescor(FALSE), 
+         data = modality, 
+         prior = prior,
+         inits = 0,
+         warmup = warmup,
+         iter = niter, 
+         sample_prior = TRUE,
+         refresh = niter/4,
+         chains = nchains,
+         cores = ncores,
+         control = list(adapt_delta = 0.99, max_treedepth = 16))
+
+  # Save model
+saveRDS(m, 
+        file = "stanout/mv_null.rda", 
+        compress = "xz")
+
+m %>% fixef() %>% round(2)
