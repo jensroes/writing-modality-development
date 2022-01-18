@@ -17,7 +17,7 @@ bibliography: references.bib
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
-knitr::opts_chunk$set(fig.keep = "all", fig.path = "figures/",
+knitr::opts_chunk$set(dev = c("pdf", "png"), fig.keep = "all", fig.path = "figures/",
         fig.align = 'center', pdf.options(encoding = "ISOLatin9.enc"))  
 
 ```
@@ -89,6 +89,8 @@ missing <- count(modality_clean, child) %>%
 #  as.data.frame() %>%
 #  write_csv("missingdata.csv")
 
+#tmp <- modality %>% filter(child %in% c("6114", "6110")) %>% as.data.frame() %>%
+#  arrange(child) 
 ```
 
 
