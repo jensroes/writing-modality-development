@@ -54,7 +54,7 @@ source("scripts/priors.R")
 prior <- prior_mod + prior_poly21 + prior_poly22 + prior_poly21mod + prior_poly22mod
 
 # Sampling
-m <- brm(f + set_rescor(FALSE), 
+m <- brm(f + set_rescor(TRUE), 
          data = modality, 
          prior = prior,
          inits = 0,

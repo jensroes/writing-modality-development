@@ -330,7 +330,7 @@ DVcovars <- DV %>% left_join(covars, by = c("modality", "school")) %>%
   rename(write_story = T_TJTextStory,
          discuss_text = T_TJDiscussText,
          discuss_structure = T_TJStruct) %>%
-  mutate(across(c(write_story, discuss_text, discuss_structure, time), ~.-min(.)))
+  mutate(across(c(time), ~.-min(.)))
 
 
 saveRDS(DVcovars, file = "data/modality_development.Rdata", compress = "xz")
