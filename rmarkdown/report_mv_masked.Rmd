@@ -1,6 +1,6 @@
 ---
 title: "Development of handwriting and typing skills in Norwegian first graders"
-author: "Eivor Finset Spilling, Vibeke Rønneberg, Wenke Mork Rogne, Jens Roeser, Mark Torrance"
+author: ""
 date: "Compiled `r format(Sys.Date(), '%d %B %Y')`"
 output: 
   bookdown::html_document2: default
@@ -17,8 +17,7 @@ bibliography: references.bib
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
-#knitr::opts_chunk$set(dev = c("pdf", "png"), fig.keep = "all", 
-                      #fig.path = "figures/",
+#knitr::opts_chunk$set(dev = c("pdf", "png"), fig.keep = "all", fig.path = "figures/",
 #        fig.align = 'center', pdf.options(encoding = "ISOLatin9.enc"))  
 
 ```
