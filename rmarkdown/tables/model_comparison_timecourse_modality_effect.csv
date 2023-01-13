@@ -1,0 +1,6 @@
+Model,$\Delta\widehat{elpd}$,$\widehat{elpd}$
+Mode $\times$ (Time + Time$^2$),--,-14796 (148)
+Mode + Time + Time$^2$,-19 (12),-14814 (150)
+Time + Time$^2$,-25 (12),-14820 (150)
+Time,-94 (23),-14890 (152)
+Intercept only,-96 (23),-14892 (151)

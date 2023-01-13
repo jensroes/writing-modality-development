@@ -1,0 +1,5 @@
+Model,$\Delta\widehat{elpd}$,$\widehat{elpd}$
+Cubic,--,-14810 (149)
+Quadratic,-11 (9),-14820 (150)
+Linear,-80 (22),-14890 (152)
+Intercept only,-82 (22),-14892 (151)
